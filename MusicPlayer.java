@@ -1,8 +1,14 @@
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Main.java to edit this template
+ */
 package musicplayer;
 
-import javazoom.jl.decoder.JavaLayerException;
-import javazoom.jl.player.advanced.AdvancedPlayer;
-
+/**
+ *
+ * @author Jayma
+ */
+import javax.sound.sampled.*;
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
@@ -16,10 +22,10 @@ import java.util.TimerTask;
 class Song implements Serializable {
     String title;
     String artist;
-    String duration; // In mm:ss format
+    String duration;
     String imagePath;
     String filePath;
-    String genre; // Added genre information
+    String genre;
 
     public Song(String title, String artist, String duration, String imagePath, String filePath, String genre) {
         this.title = title;
@@ -27,15 +33,20 @@ class Song implements Serializable {
         this.duration = duration;
         this.imagePath = imagePath;
         this.filePath = filePath;
-        this.genre = genre; // Set genre
+        this.genre = genre;
+    }
+
+    @Override
+    public String toString() {
+        return title + " - " + artist;
     }
 }
 
 public class MusicPlayer extends JFrame {
-    private JButton playButton, pauseButton, nextButton, previousButton, addMusicButton, selectButton, stopButton;
+    private JButton playButton, pauseButton, nextButton, previousButton, stopButton, addMusicButton, showPlaylistButton;
     private JLabel songLabel;
     private JProgressBar progressBar;
-    private AdvancedPlayer mp3Player;
+    private Clip audioClip;
     private boolean isPlaying = false;
     private boolean isPaused = false;
     private long clipTimePosition = 0;
@@ -43,59 +54,100 @@ public class MusicPlayer extends JFrame {
     private ArrayList<Song> playlist = new ArrayList<>();
     private final String playlistFile = "playlist.bin";
     private Timer timer;
-    private JLabel imageLabel; // To display album image
+    private JLabel imageLabel;
+    private JPopupMenu playlistMenu;
 
     public MusicPlayer() {
-        setTitle("Reproductor de Música - MP3");
-        setSize(600, 400);
+        setTitle("Reproductor de Música - WAV");
+        setSize(800, 600);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
+        // Panel de control
         JPanel controlPanel = new JPanel();
         controlPanel.setLayout(new BorderLayout());
 
+        // Panel de progreso
         JPanel progressPanel = new JPanel();
         progressPanel.setLayout(new BorderLayout());
 
+        // Barra de progreso
         progressBar = new JProgressBar();
         progressBar.setValue(0);
         progressBar.setStringPainted(true);
-        progressBar.setPreferredSize(new Dimension(400, 20));
         progressPanel.add(progressBar, BorderLayout.CENTER);
+
+        // Agregar el panel de progreso al panel de control
         controlPanel.add(progressPanel, BorderLayout.NORTH);
 
+        // Panel de botones
         JPanel buttonPanel = new JPanel();
         buttonPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 15, 15));
 
-        playButton = new JButton(">"); 
-        pauseButton = new JButton("||"); 
-        previousButton = new JButton("<<"); 
-        nextButton = new JButton(">>"); 
-        addMusicButton = new JButton("+");
-        selectButton = new JButton("Select");
-        stopButton = new JButton("Stop");
+        // Botones
+        playButton = new JButton(">");
+        playButton.setFont(new Font("Arial", Font.BOLD, 24));
 
+        pauseButton = new JButton("||");
+        pauseButton.setFont(new Font("Arial", Font.BOLD, 24));
+
+        previousButton = new JButton("<<");
+        previousButton.setFont(new Font("Arial", Font.BOLD, 24));
+
+        nextButton = new JButton(">>");
+        nextButton.setFont(new Font("Arial", Font.BOLD, 24));
+
+        stopButton = new JButton("■");
+        stopButton.setFont(new Font("Arial", Font.BOLD, 24));
+
+        addMusicButton = new JButton("+");
+        addMusicButton.setFont(new Font("Arial", Font.BOLD, 24));
+
+        showPlaylistButton = new JButton("♫");
+        showPlaylistButton.setFont(new Font("Arial", Font.BOLD, 24));
+
+        // Añadir botones al panel
         buttonPanel.add(previousButton);
         buttonPanel.add(playButton);
         buttonPanel.add(pauseButton);
         buttonPanel.add(nextButton);
-        buttonPanel.add(addMusicButton);
-        buttonPanel.add(selectButton);
         buttonPanel.add(stopButton);
+        buttonPanel.add(addMusicButton);
+        buttonPanel.add(showPlaylistButton);
 
+        // Inicialización del menú de lista de reproducción
+        playlistMenu = new JPopupMenu();
+        updatePlaylistMenu();
+
+        showPlaylistButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                // Mostrar el menú un poco más arriba del botón
+                Point location = showPlaylistButton.getLocationOnScreen();
+                playlistMenu.show(showPlaylistButton, 0, -playlistMenu.getPreferredSize().height - 10);
+            }
+        });
+
+        // Añadir el panel de botones al panel de control
         controlPanel.add(buttonPanel, BorderLayout.CENTER);
 
+        // Etiqueta de la canción
         songLabel = new JLabel("No song playing");
         songLabel.setHorizontalAlignment(SwingConstants.CENTER);
         songLabel.setFont(new Font("Arial", Font.PLAIN, 16));
+
         add(songLabel, BorderLayout.NORTH);
 
+        // Panel de imagen
         imageLabel = new JLabel();
         imageLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        add(imageLabel, BorderLayout.CENTER); // Add imageLabel to center
+        imageLabel.setPreferredSize(new Dimension(300, 300));
+        add(imageLabel, BorderLayout.CENTER);
 
+        // Añadir el panel de control a la ventana principal
         add(controlPanel, BorderLayout.SOUTH);
 
+        // Action listener para el botón de Play
         playButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -107,6 +159,7 @@ public class MusicPlayer extends JFrame {
             }
         });
 
+        // Action listener para el botón de Pause
         pauseButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -114,6 +167,7 @@ public class MusicPlayer extends JFrame {
             }
         });
 
+        // Action listener para el botón de Siguiente
         nextButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -121,6 +175,7 @@ public class MusicPlayer extends JFrame {
             }
         });
 
+        // Action listener para el botón de Anterior
         previousButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -128,20 +183,7 @@ public class MusicPlayer extends JFrame {
             }
         });
 
-        addMusicButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                addMusic();
-            }
-        });
-
-        selectButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                selectSong();
-            }
-        });
-
+        // Action listener para el botón de Parar
         stopButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -149,31 +191,46 @@ public class MusicPlayer extends JFrame {
             }
         });
 
+        // Action listener para el botón de Agregar Música
+        addMusicButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                addMusic();
+            }
+        });
+
+        // Cargar la lista de canciones al iniciar
         loadPlaylist();
+
         setVisible(true);
     }
 
     private void playSong(Song song) {
         try {
-            if (mp3Player != null && isPlaying) {
-                mp3Player.close();
+            if (audioClip != null && audioClip.isRunning()) {
+                audioClip.stop();
             }
 
-            FileInputStream fileInputStream = new FileInputStream(song.filePath);
-            mp3Player = new AdvancedPlayer(fileInputStream);
-            progressBar.setValue(0);
-            // Set duration for progress bar max
-            int totalMilliseconds = getDuration(song.filePath);
+            File audioFile = new File(song.filePath);
+            AudioInputStream audioStream = AudioSystem.getAudioInputStream(audioFile);
+            audioClip = AudioSystem.getClip();
+            audioClip.open(audioStream);
+
+            // Reiniciar barra de progreso y temporizador
+            resetProgressBar();
+
+            int totalMilliseconds = (int) (audioClip.getMicrosecondLength() / 1000);
             progressBar.setMaximum(totalMilliseconds);
             progressBar.setString(formatTime(0) + " / " + formatTime(totalMilliseconds));
 
+            // Temporizador para actualizar la barra de progreso
             timer = new Timer();
             timer.scheduleAtFixedRate(new TimerTask() {
                 @Override
                 public void run() {
                     if (isPlaying) {
                         SwingUtilities.invokeLater(() -> {
-                            long currentMilliseconds = getPosition(); // Update accordingly
+                            long currentMilliseconds = audioClip.getMicrosecondPosition() / 1000;
                             progressBar.setValue((int) currentMilliseconds);
                             progressBar.setString(formatTime((int) currentMilliseconds) + " / " + formatTime(totalMilliseconds));
                         });
@@ -181,150 +238,116 @@ public class MusicPlayer extends JFrame {
                 }
             }, 0, 1000);
 
+            audioClip.start();
             isPlaying = true;
             isPaused = false;
-            songLabel.setText("Reproduciendo: " + song.title);
+            songLabel.setText("Reproduciendo: " + song.title + " (" + song.artist + ") - Genre: " + song.genre);
 
-            // Display image
+            // Mostrar la imagen del álbum
             if (song.imagePath != null && !song.imagePath.isEmpty()) {
                 ImageIcon imageIcon = new ImageIcon(song.imagePath);
-                Image image = imageIcon.getImage().getScaledInstance(150, 150, Image.SCALE_SMOOTH); // Adjust size as needed
+                Image image = imageIcon.getImage().getScaledInstance(300, 300, Image.SCALE_SMOOTH);
                 imageLabel.setIcon(new ImageIcon(image));
+            } else {
+                imageLabel.setIcon(null);
             }
 
-            new Thread(() -> {
-                try {
-                    mp3Player.play();
-                } catch (JavaLayerException e) {
-                    e.printStackTrace();
-                }
-            }).start();
-
-        } catch (FileNotFoundException | JavaLayerException e) {
+            // Ocultar el menú de lista de reproducción
+            playlistMenu.setVisible(false);
+        } catch (UnsupportedAudioFileException | IOException | LineUnavailableException e) {
             e.printStackTrace();
         }
     }
 
     private void pauseSong() {
-        if (isPlaying) {
-            clipTimePosition = getPosition(); // Store current position
-            mp3Player.close();
+        if (isPlaying && !isPaused) {
+            audioClip.stop();
+            clipTimePosition = audioClip.getMicrosecondPosition();
             isPaused = true;
-            timer.cancel();
         }
     }
 
     private void resumeSong() {
         if (isPaused) {
-            playSong(playlist.get(currentSongIndex)); // Call playSong to continue
+            audioClip.setMicrosecondPosition(clipTimePosition);
+            audioClip.start();
+            isPlaying = true;
             isPaused = false;
-        }
-    }
-
-    private void nextSong() {
-        if (mp3Player != null && isPlaying) {
-            mp3Player.close();
-            timer.cancel();
-        }
-        currentSongIndex = (currentSongIndex + 1) % playlist.size();
-        playSong(playlist.get(currentSongIndex));
-    }
-
-    private void previousSong() {
-        if (mp3Player != null && isPlaying) {
-            mp3Player.close();
-            timer.cancel();
-        }
-        currentSongIndex = (currentSongIndex - 1 + playlist.size()) % playlist.size();
-        playSong(playlist.get(currentSongIndex));
-    }
-
-    private void addMusic() {
-        JFileChooser fileChooser = new JFileChooser();
-        FileNameExtensionFilter filter = new FileNameExtensionFilter("Archivos MP3", "mp3");
-        fileChooser.setFileFilter(filter);
-
-        int returnValue = fileChooser.showOpenDialog(null);
-
-        if (returnValue == JFileChooser.APPROVE_OPTION) {
-            File selectedFile = fileChooser.getSelectedFile();
-            String filePath = selectedFile.getAbsolutePath();
-
-            // Gather additional information from user
-            String title = JOptionPane.showInputDialog("Ingrese el nombre de la canción:");
-            String artist = JOptionPane.showInputDialog("Ingrese el nombre del artista:");
-            String genre = JOptionPane.showInputDialog("Ingrese el género de la música:");
-            String imagePath = JOptionPane.showInputDialog("Ingrese la ruta de la imagen del álbum (deje en blanco si no tiene):");
-
-            // Set default values if user does not provide them
-            if (title == null || title.trim().isEmpty()) title = selectedFile.getName().replace(".mp3", "");
-            if (artist == null || artist.trim().isEmpty()) artist = "Unknown Artist";
-            if (genre == null || genre.trim().isEmpty()) genre = "Unknown Genre";
-            if (imagePath == null) imagePath = "";
-
-            String duration = formatDuration(getDuration(filePath)); // Duration
-
-            Song song = new Song(title, artist, duration, imagePath, filePath, genre);
-            playlist.add(song);
-            savePlaylist();
-            songLabel.setText("Agregado: " + selectedFile.getName());
-
-            // Display image if available
-            if (!imagePath.isEmpty()) {
-                ImageIcon imageIcon = new ImageIcon(imagePath);
-                Image image = imageIcon.getImage().getScaledInstance(150, 150, Image.SCALE_SMOOTH); // Adjust size as needed
-                imageLabel.setIcon(new ImageIcon(image));
-            } else {
-                imageLabel.setIcon(null); // Clear image if no path
-            }
-        }
-    }
-
-    private void selectSong() {
-        if (playlist.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No hay canciones en la lista de reproducción.");
-            return;
-        }
-
-        String[] options = new String[playlist.size()];
-        for (int i = 0; i < playlist.size(); i++) {
-            options[i] = playlist.get(i).title;
-        }
-
-        String selectedTitle = (String) JOptionPane.showInputDialog(this, "Seleccione una canción:",
-                "Seleccionar Canción", JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
-
-        if (selectedTitle != null) {
-            for (int i = 0; i < playlist.size(); i++) {
-                if (playlist.get(i).title.equals(selectedTitle)) {
-                    currentSongIndex = i;
-                    playSong(playlist.get(i));
-                    break;
-                }
-            }
         }
     }
 
     private void stopSong() {
-        if (mp3Player != null && isPlaying) {
-            mp3Player.close();
+        if (isPlaying) {
+            audioClip.stop();
+            audioClip.setMicrosecondPosition(0);
+            progressBar.setValue(0);
+            progressBar.setString(formatTime(0) + " / " + formatTime(progressBar.getMaximum()));
+            songLabel.setText("No song playing");
             isPlaying = false;
             isPaused = false;
-            timer.cancel();
-            progressBar.setValue(0);
-            progressBar.setString("0:00 / " + formatTime(getDuration(playlist.get(currentSongIndex).filePath)));
-            songLabel.setText("Reproducción detenida");
-            imageLabel.setIcon(null); // Clear image when stopped
+            if (timer != null) {
+                timer.cancel();
+                timer = null;
+            }
         }
     }
 
-    private void loadPlaylist() {
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(playlistFile))) {
-            playlist = (ArrayList<Song>) ois.readObject();
-        } catch (FileNotFoundException e) {
-            // No playlist file, ignore
-        } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
+    private void nextSong() {
+        if (!playlist.isEmpty()) {
+            currentSongIndex = (currentSongIndex + 1) % playlist.size();
+            playSong(playlist.get(currentSongIndex));
+        }
+    }
+
+    private void previousSong() {
+        if (!playlist.isEmpty()) {
+            currentSongIndex = (currentSongIndex - 1 + playlist.size()) % playlist.size();
+            playSong(playlist.get(currentSongIndex));
+        }
+    }
+
+    private void addMusic() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setFileFilter(new FileNameExtensionFilter("Audio Files", "wav"));
+        int result = fileChooser.showOpenDialog(this);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File audioFile = fileChooser.getSelectedFile();
+            String filePath = audioFile.getAbsolutePath();
+
+            // Obtener información adicional
+            String title = JOptionPane.showInputDialog("Título de la canción:");
+            String artist = JOptionPane.showInputDialog("Artista:");
+            String genre = JOptionPane.showInputDialog("Género:");
+
+            // Seleccionar imagen
+            JFileChooser imageChooser = new JFileChooser();
+            imageChooser.setFileFilter(new FileNameExtensionFilter("Image Files", "jpg", "jpeg", "png"));
+            int imageResult = imageChooser.showOpenDialog(this);
+            String imagePath = "";
+            if (imageResult == JFileChooser.APPROVE_OPTION) {
+                File imageFile = imageChooser.getSelectedFile();
+                imagePath = imageFile.getAbsolutePath();
+            }
+
+            // Crear y agregar la canción
+            Song newSong = new Song(title, artist, "0:00", imagePath, filePath, genre);
+            playlist.add(newSong);
+            updatePlaylistMenu();
+            savePlaylist();
+        }
+    }
+
+    private void updatePlaylistMenu() {
+        playlistMenu.removeAll();
+        for (Song song : playlist) {
+            JMenuItem menuItem = new JMenuItem(song.toString());
+            menuItem.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    playSong(song);
+                }
+            });
+            playlistMenu.add(menuItem);
         }
     }
 
@@ -336,29 +359,33 @@ public class MusicPlayer extends JFrame {
         }
     }
 
-    private int getDuration(String filePath) {
-        // Implement duration extraction here
-        return 0; // Placeholder, return actual duration in milliseconds
+    private void loadPlaylist() {
+        File file = new File(playlistFile);
+        if (file.exists()) {
+            try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+                playlist = (ArrayList<Song>) ois.readObject();
+                updatePlaylistMenu();
+            } catch (IOException | ClassNotFoundException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
-    private long getPosition() {
-        // Implement position retrieval here
-        return 0; // Placeholder, return actual position in milliseconds
-    }
-
-    private String formatDuration(int milliseconds) {
-        int minutes = milliseconds / 60000;
-        int seconds = (milliseconds % 60000) / 1000;
-        return String.format("%d:%02d", minutes, seconds);
+    private void resetProgressBar() {
+        if (timer != null) {
+            timer.cancel();
+        }
+        progressBar.setValue(0);
+        progressBar.setString("0:00 / " + formatTime(progressBar.getMaximum()));
     }
 
     private String formatTime(int milliseconds) {
-        int minutes = milliseconds / 60000;
-        int seconds = (milliseconds % 60000) / 1000;
-        return String.format("%d:%02d", minutes, seconds);
+        int seconds = (milliseconds / 1000) % 60;
+        int minutes = (milliseconds / (1000 * 60)) % 60;
+        return String.format("%02d:%02d", minutes, seconds);
     }
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new MusicPlayer());
+        SwingUtilities.invokeLater(MusicPlayer::new);
     }
 }
